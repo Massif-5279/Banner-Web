@@ -1,0 +1,696 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>双层轮播图</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Microsoft YaHei', Arial, sans-serif;
+            overflow: hidden;
+            background: #000;
+        }
+
+        .carousel-container {
+            position: relative;
+            width: 100vw;
+            height: 100vh;
+        }
+
+        /* 背景轮播图 - 模糊效果，完全填满屏幕 */
+        .background-carousel {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            z-index: 1;
+        }
+
+        .background-carousel img {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            object-fit: cover; /* 完全填满屏幕，不保持比例 */
+            /* 模糊效果 - 添加浏览器前缀支持 */
+            -webkit-filter: blur(20px);
+            -moz-filter: blur(20px);
+            -ms-filter: blur(20px);
+            filter: blur(20px);
+            opacity: 0;
+            transition: opacity 1s ease-in-out;
+        }
+
+        /* 老浏览器降级方案 - 添加半透明遮罩层 */
+        .background-carousel::after {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.3);
+            z-index: 1;
+            pointer-events: none;
+        }
+
+        .background-carousel img.active {
+            opacity: 0.7; /* 背景图片透明度 */
+        }
+
+        /* 主轮播图 - 保持比例，填满屏幕 */
+        .main-carousel {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            z-index: 3; /* 确保在遮罩层之上 */
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .main-carousel img {
+            position: absolute;
+            max-width: 100%;
+            max-height: 100%;
+            object-fit: contain; /* 保持原始比例 */
+            opacity: 0;
+            transition: opacity 1s ease-in-out;
+        }
+
+        .main-carousel img.active {
+            opacity: 1;
+        }
+
+        /* 控制面板 */
+        .controls {
+            position: fixed;
+            top: 20px;
+            left: 20px;
+            z-index: 10;
+            background: rgba(0, 0, 0, 0.8);
+            padding: 20px;
+            border-radius: 10px;
+            color: white;
+            backdrop-filter: blur(10px);
+            display: none; /* 隐藏控制面板 */
+        }
+
+        .control-group {
+            margin-bottom: 15px;
+        }
+
+        .control-group label {
+            display: block;
+            margin-bottom: 5px;
+            font-size: 14px;
+        }
+
+        .control-group input[type="range"] {
+            width: 200px;
+            margin-right: 10px;
+        }
+
+        .control-group input[type="number"] {
+            width: 80px;
+            padding: 5px;
+            border: none;
+            border-radius: 5px;
+            background: rgba(255, 255, 255, 0.2);
+            color: white;
+            text-align: center;
+        }
+
+        .control-buttons {
+            display: flex;
+            gap: 10px;
+        }
+
+        .btn {
+            padding: 8px 16px;
+            border: none;
+            border-radius: 5px;
+            background: rgba(255, 255, 255, 0.2);
+            color: white;
+            cursor: pointer;
+            transition: background 0.3s;
+        }
+
+        .btn:hover {
+            background: rgba(255, 255, 255, 0.3);
+        }
+
+        /* 指示器 */
+        .indicators {
+            position: fixed;
+            bottom: 30px;
+            left: 50%;
+            transform: translateX(-50%);
+            z-index: 10;
+            display: none; /* 隐藏指示器 */
+            gap: 10px;
+        }
+
+        .indicator {
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            background: rgba(255, 255, 255, 0.5);
+            cursor: pointer;
+            transition: background 0.3s;
+        }
+
+        .indicator.active {
+            background: white;
+        }
+
+        /* 导航箭头 */
+        .nav-arrow {
+            position: fixed;
+            top: 50%;
+            transform: translateY(-50%);
+            z-index: 10;
+            background: rgba(0, 0, 0, 0.5);
+            color: white;
+            border: none;
+            width: 50px;
+            height: 50px;
+            border-radius: 50%;
+            cursor: pointer;
+            font-size: 20px;
+            transition: background 0.3s;
+            display: none; /* 隐藏导航箭头 */
+        }
+
+        .nav-arrow:hover {
+            background: rgba(0, 0, 0, 0.8);
+        }
+
+        .nav-arrow.prev {
+            left: 20px;
+        }
+
+        .nav-arrow.next {
+            right: 20px;
+        }
+
+        /* 状态显示 */
+        .status {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            z-index: 10;
+            background: rgba(0, 0, 0, 0.8);
+            padding: 10px 15px;
+            border-radius: 5px;
+            color: white;
+            font-size: 14px;
+            display: none; /* 隐藏状态显示 */
+        }
+    </style>
+</head>
+<body>
+    <div class="carousel-container">
+        <!-- 背景轮播图 -->
+        <div class="background-carousel" id="backgroundCarousel">
+            <!-- 图片将通过JavaScript动态添加 -->
+        </div>
+
+        <!-- 主轮播图 -->
+        <div class="main-carousel" id="mainCarousel">
+            <!-- 图片将通过JavaScript动态添加 -->
+        </div>
+    </div>
+
+    <!-- 控制面板 -->
+    <div class="controls">
+        <div class="control-group">
+            <label>切换间隔 (秒)</label>
+            <input type="range" id="intervalSlider" min="1" max="10" value="3" step="0.5">
+            <input type="number" id="intervalInput" min="1" max="10" value="3" step="0.5">
+        </div>
+        <div class="control-buttons">
+            <button class="btn" id="playPauseBtn">暂停</button>
+            <button class="btn" id="prevBtn">上一张</button>
+            <button class="btn" id="nextBtn">下一张</button>
+        </div>
+    </div>
+
+    <!-- 指示器 -->
+    <div class="indicators" id="indicators">
+        <!-- 指示器将通过JavaScript动态添加 -->
+    </div>
+
+    <!-- 导航箭头 -->
+    <button class="nav-arrow prev" id="navPrev">‹</button>
+    <button class="nav-arrow next" id="navNext">›</button>
+
+    <!-- 状态显示 -->
+    <div class="status" id="status">
+        正在加载图片...
+    </div>
+
+    <!-- 加载提示 -->
+    <div class="loading-overlay" id="loadingOverlay" style="
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        background: rgba(0, 0, 0, 0.8);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        z-index: 100;
+        color: white;
+        font-size: 18px;
+        backdrop-filter: blur(10px);
+    ">
+        <div style="text-align: center;">
+            <div style="margin-bottom: 20px;">正在加载图片...</div>
+            <div id="loadingProgress">0/5</div>
+        </div>
+    </div>
+
+    <script>
+        class DualCarousel {
+            constructor() {
+                // 从static目录读取的图片文件列表
+                this.images = [
+                    './static/4faa98f3-3ca5-4a92-b989-f662707b3ec23.png',
+                    './static/4faa98f3-3ca5-4a92-b989-f662707b3ec3.png',
+                    './static/67f33d020005bcec1d6d3ea158300315000000a100004f50.jpg',
+                    './static/79dU1My0AWfz233d851c175dbb3fb1eac84e1eee8a44.png',
+                    './static/8d9d7397-83b4-4cbe-8f17-de76605f5739.png'
+                ];
+                
+                this.currentIndex = 0;
+                this.interval = 6000; // 默认3秒
+                this.isPlaying = true;
+                this.timer = null;
+                this.loadedImages = 0;
+                this.totalImages = this.images.length;
+                
+                // 检测浏览器是否支持CSS filter
+                this.supportsFilter = this.checkFilterSupport();
+                this.enhanceCompatibility();
+                
+                this.init();
+            }
+
+            // 检测浏览器是否支持CSS filter
+            checkFilterSupport() {
+                var testElement = document.createElement('div');
+                testElement.style.cssText = '-webkit-filter: blur(2px); filter: blur(2px);';
+                return testElement.style.filter !== '' || testElement.style.webkitFilter !== '';
+            }
+
+            // 增强老浏览器兼容性
+            enhanceCompatibility() {
+                if (!this.supportsFilter) {
+                    // 如果不支持filter，增强遮罩层效果
+                    var style = document.createElement('style');
+                    style.textContent = 
+                        '.background-carousel::after { background: rgba(0, 0, 0, 0.5) !important; }' +
+                        '.background-carousel img { transform: scale(1.1); }'; // 轻微放大模拟模糊
+                    document.head.appendChild(style);
+                    console.log('老浏览器兼容模式：使用遮罩层替代模糊效果');
+                }
+            }
+
+            init() {
+                var self = this;
+                this.preloadImages().then(function() {
+                    self.createImages();
+                    self.createIndicators();
+                    self.bindEvents();
+                    self.startAutoPlay();
+                    self.updateStatus();
+                });
+            }
+
+            // 预加载图片
+            preloadImages() {
+                var self = this;
+                return new Promise(function(resolve) {
+                    if (self.images.length === 0) {
+                        resolve();
+                        return;
+                    }
+
+                    self.images.forEach(function(src, index) {
+                        var img = new Image();
+                        img.onload = function() {
+                            self.loadedImages++;
+                            self.updateLoadingStatus();
+                            if (self.loadedImages === self.totalImages) {
+                                resolve();
+                            }
+                        };
+                        img.onerror = function() {
+                            console.warn('图片加载失败: ' + src);
+                            self.loadedImages++;
+                            if (self.loadedImages === self.totalImages) {
+                                resolve();
+                            }
+                        };
+                        img.src = src;
+                    });
+                });
+            }
+
+            updateLoadingStatus() {
+                var loadingProgress = document.getElementById('loadingProgress');
+                var loadingOverlay = document.getElementById('loadingOverlay');
+                
+                if (loadingProgress) {
+                    loadingProgress.textContent = this.loadedImages + '/' + this.totalImages;
+                }
+                
+                // 加载完成后隐藏加载界面
+                if (this.loadedImages === this.totalImages) {
+                    setTimeout(function() {
+                        if (loadingOverlay) {
+                            loadingOverlay.style.display = 'none';
+                        }
+                    }, 500);
+                }
+            }
+
+            createImages() {
+                var mainCarousel = document.getElementById('mainCarousel');
+                var backgroundCarousel = document.getElementById('backgroundCarousel');
+                var self = this;
+                
+                // 检查是否有图片
+                if (this.images.length === 0) {
+                    this.showNoImagesMessage();
+                    return;
+                }
+                
+                this.images.forEach(function(src, index) {
+                    // 创建主轮播图图片
+                    var mainImg = document.createElement('img');
+                    mainImg.src = src;
+                    mainImg.alt = '图片 ' + (index + 1);
+                    if (index === 0) mainImg.classList.add('active');
+                    mainCarousel.appendChild(mainImg);
+                    
+                    // 创建背景轮播图图片
+                    var bgImg = document.createElement('img');
+                    bgImg.src = src;
+                    bgImg.alt = '背景图片 ' + (index + 1);
+                    if (index === 0) bgImg.classList.add('active');
+                    backgroundCarousel.appendChild(bgImg);
+                });
+            }
+
+            showNoImagesMessage() {
+                var mainCarousel = document.getElementById('mainCarousel');
+                var messageDiv = document.createElement('div');
+                messageDiv.style.cssText = 
+                    'position: absolute;' +
+                    'top: 50%;' +
+                    'left: 50%;' +
+                    'transform: translate(-50%, -50%);' +
+                    'color: white;' +
+                    'text-align: center;' +
+                    'font-size: 24px;' +
+                    'background: rgba(0, 0, 0, 0.8);' +
+                    'padding: 40px;' +
+                    'border-radius: 10px;' +
+                    'backdrop-filter: blur(10px);';
+                messageDiv.innerHTML = 
+                    '<div style="margin-bottom: 20px;">📁 未找到图片</div>' +
+                    '<div style="font-size: 16px; opacity: 0.8;">' +
+                        '请在 ./static 目录下放置图片文件<br>' +
+                        '支持格式：jpg, png, gif, webp' +
+                    '</div>';
+                mainCarousel.appendChild(messageDiv);
+            }
+
+            createIndicators() {
+                var indicatorsContainer = document.getElementById('indicators');
+                var self = this;
+                
+                this.images.forEach(function(_, index) {
+                    var indicator = document.createElement('div');
+                    indicator.classList.add('indicator');
+                    if (index === 0) indicator.classList.add('active');
+                    indicator.addEventListener('click', function() { 
+                        self.goToSlide(index); 
+                    });
+                    indicatorsContainer.appendChild(indicator);
+                });
+            }
+
+            bindEvents() {
+                // 间隔控制
+                var intervalSlider = document.getElementById('intervalSlider');
+                var intervalInput = document.getElementById('intervalInput');
+                var self = this;
+                
+                intervalSlider.addEventListener('input', function(e) {
+                    self.interval = parseFloat(e.target.value) * 1000;
+                    intervalInput.value = e.target.value;
+                    self.restartAutoPlay();
+                    self.updateStatus();
+                });
+                
+                intervalInput.addEventListener('change', function(e) {
+                    var value = Math.max(1, Math.min(10, parseFloat(e.target.value)));
+                    self.interval = value * 1000;
+                    intervalSlider.value = value;
+                    intervalInput.value = value;
+                    self.restartAutoPlay();
+                    self.updateStatus();
+                });
+
+                // 播放控制
+                document.getElementById('playPauseBtn').addEventListener('click', function() {
+                    self.togglePlayPause();
+                });
+
+                // 导航按钮
+                document.getElementById('prevBtn').addEventListener('click', function() {
+                    self.prevSlide();
+                });
+                
+                document.getElementById('nextBtn').addEventListener('click', function() {
+                    self.nextSlide();
+                });
+
+                // 导航箭头
+                document.getElementById('navPrev').addEventListener('click', function() {
+                    self.prevSlide();
+                });
+                
+                document.getElementById('navNext').addEventListener('click', function() {
+                    self.nextSlide();
+                });
+
+                // 键盘控制
+                document.addEventListener('keydown', function(e) {
+                    switch(e.key) {
+                        case 'ArrowLeft':
+                            self.prevSlide();
+                            break;
+                        case 'ArrowRight':
+                            self.nextSlide();
+                            break;
+                        case ' ':
+                            e.preventDefault();
+                            self.togglePlayPause();
+                            break;
+                    }
+                });
+
+                // 滑动手势支持
+                this.bindSwipeEvents();
+            }
+
+            bindSwipeEvents() {
+                var self = this;
+                var startX = 0;
+                var startY = 0;
+                var endX = 0;
+                var endY = 0;
+                var minSwipeDistance = 50; // 最小滑动距离
+                var maxVerticalDistance = 100; // 最大垂直距离，防止垂直滑动误触发
+                var carouselContainer = document.querySelector('.carousel-container');
+
+                // 触摸开始
+                carouselContainer.addEventListener('touchstart', function(e) {
+                    var touch = e.touches[0];
+                    startX = touch.clientX;
+                    startY = touch.clientY;
+                }, { passive: true });
+
+                // 触摸结束
+                carouselContainer.addEventListener('touchend', function(e) {
+                    var touch = e.changedTouches[0];
+                    endX = touch.clientX;
+                    endY = touch.clientY;
+                    
+                    var deltaX = endX - startX;
+                    var deltaY = Math.abs(endY - startY);
+                    
+                    // 检查是否为有效的水平滑动
+                    if (Math.abs(deltaX) > minSwipeDistance && deltaY < maxVerticalDistance) {
+                        if (deltaX > 0) {
+                            // 向右滑动 - 上一张
+                            self.prevSlide();
+                        } else {
+                            // 向左滑动 - 下一张
+                            self.nextSlide();
+                        }
+                    }
+                }, { passive: true });
+
+                // 鼠标事件支持（桌面端）
+                var isMouseDown = false;
+                var mouseStartX = 0;
+                var mouseStartY = 0;
+
+                carouselContainer.addEventListener('mousedown', function(e) {
+                    isMouseDown = true;
+                    mouseStartX = e.clientX;
+                    mouseStartY = e.clientY;
+                    e.preventDefault();
+                });
+
+                carouselContainer.addEventListener('mousemove', function(e) {
+                    if (isMouseDown) {
+                        e.preventDefault();
+                    }
+                });
+
+                carouselContainer.addEventListener('mouseup', function(e) {
+                    if (isMouseDown) {
+                        var deltaX = e.clientX - mouseStartX;
+                        var deltaY = Math.abs(e.clientY - mouseStartY);
+                        
+                        // 检查是否为有效的水平拖拽
+                        if (Math.abs(deltaX) > minSwipeDistance && deltaY < maxVerticalDistance) {
+                            if (deltaX > 0) {
+                                // 向右拖拽 - 上一张
+                                self.prevSlide();
+                            } else {
+                                // 向左拖拽 - 下一张
+                                self.nextSlide();
+                            }
+                        }
+                        
+                        isMouseDown = false;
+                    }
+                });
+
+                // 防止拖拽时离开容器
+                carouselContainer.addEventListener('mouseleave', function() {
+                    isMouseDown = false;
+                });
+            }
+
+            goToSlide(index) {
+                // 移除当前活动状态
+                document.querySelectorAll('#mainCarousel img').forEach(function(img) {
+                    img.classList.remove('active');
+                });
+                document.querySelectorAll('#backgroundCarousel img').forEach(function(img) {
+                    img.classList.remove('active');
+                });
+                document.querySelectorAll('.indicator').forEach(function(indicator) {
+                    indicator.classList.remove('active');
+                });
+
+                // 设置新的活动状态
+                this.currentIndex = index;
+                document.querySelectorAll('#mainCarousel img')[this.currentIndex].classList.add('active');
+                document.querySelectorAll('#backgroundCarousel img')[this.currentIndex].classList.add('active');
+                document.querySelectorAll('.indicator')[this.currentIndex].classList.add('active');
+                
+                this.updateStatus();
+            }
+
+            nextSlide() {
+                var nextIndex = (this.currentIndex + 1) % this.images.length;
+                this.goToSlide(nextIndex);
+            }
+
+            prevSlide() {
+                var prevIndex = (this.currentIndex - 1 + this.images.length) % this.images.length;
+                this.goToSlide(prevIndex);
+            }
+
+            startAutoPlay() {
+                var self = this;
+                if (this.isPlaying) {
+                    this.timer = setInterval(function() {
+                        self.nextSlide();
+                    }, this.interval);
+                }
+            }
+
+            stopAutoPlay() {
+                if (this.timer) {
+                    clearInterval(this.timer);
+                    this.timer = null;
+                }
+            }
+
+            restartAutoPlay() {
+                this.stopAutoPlay();
+                this.startAutoPlay();
+            }
+
+            togglePlayPause() {
+                this.isPlaying = !this.isPlaying;
+                
+                if (this.isPlaying) {
+                    this.startAutoPlay();
+                } else {
+                    this.stopAutoPlay();
+                }
+                
+                var btn = document.getElementById('playPauseBtn');
+                btn.textContent = this.isPlaying ? '⏸️' : '▶️';
+                
+                this.updateStatus();
+            }
+
+            updateStatus() {
+                var status = document.getElementById('status');
+                var playStatus = this.isPlaying ? '正在播放' : '已暂停';
+                var currentImage = this.currentIndex + 1;
+                var totalImages = this.images.length;
+                var intervalSeconds = this.interval / 1000;
+                
+                status.textContent = playStatus + ' | 图片: ' + currentImage + '/' + totalImages + ' | 间隔: ' + intervalSeconds + '秒';
+            }
+        }
+
+        // 页面加载完成后初始化轮播图
+        document.addEventListener('DOMContentLoaded', function() {
+            new DualCarousel();
+        });
+
+        // 图片加载错误处理
+        document.addEventListener('error', function(e) {
+            if (e.target.tagName === 'IMG') {
+                console.warn('图片加载失败: ' + e.target.src);
+                // 可以在这里设置默认图片或显示错误信息
+            }
+        }, true);
+    </script>
+</body>
+</html>

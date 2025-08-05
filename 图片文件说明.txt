@@ -1,0 +1,32 @@
+请在此目录下放置以下图片文件：
+
+📸 需要的图片文件：
+- image1.jpg
+- image2.jpg  
+- image3.jpg
+- image4.jpg
+- image5.jpg
+
+📝 说明：
+1. 图片格式支持：jpg, png, gif, webp
+2. 建议图片尺寸：1920x1080 或更高
+3. 建议文件大小：每张图片不超过2MB
+4. 图片数量：可以根据需要增加或减少
+
+🔧 如何修改图片：
+如果您想使用不同的图片文件名，请编辑 carousel.html 文件中的这部分代码：
+
+this.images = [
+    'image1.jpg',
+    'image2.jpg', 
+    'image3.jpg',
+    'image4.jpg',
+    'image5.jpg'
+];
+
+将文件名改为您实际的图片文件名即可。
+
+💡 提示：
+- 可以使用任意数量的图片（建议3-10张）
+- 图片会按照数组中的顺序进行轮播
+- 支持相对路径和子文件夹（如：'images/photo1.jpg'）
