@@ -462,6 +462,11 @@
                         return;
                     }
 
+                    // 在预加载之前打乱图片顺序
+                    console.log('打乱图片顺序...');
+                    self.shuffleArray(self.images);
+                    console.log('图片顺序已打乱，开始预加载...');
+
                     self.images.forEach(function(src, index) {
                         self.loadImageWithRetry(src, 3).then(function() {
                             self.loadedImages++;
@@ -530,6 +535,24 @@
                         }
                     }, 500);
                 }
+            }
+
+            // Fisher-Yates 洗牌算法，用于打乱数组顺序
+            shuffleArray(array) {
+                console.log('原始图片顺序（前5张）:', array.slice(0, 5));
+                
+                for (var i = array.length - 1; i > 0; i--) {
+                    // 生成0到i之间的随机索引
+                    var j = Math.floor(Math.random() * (i + 1));
+                    
+                    // 交换元素
+                    var temp = array[i];
+                    array[i] = array[j];
+                    array[j] = temp;
+                }
+                
+                console.log('打乱后顺序（前5张）:', array.slice(0, 5));
+                return array;
             }
 
             createImages() {
