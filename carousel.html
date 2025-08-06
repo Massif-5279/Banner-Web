@@ -287,11 +287,11 @@
             constructor() {
                 // 从static目录读取的图片文件列表
                 this.images = [
-                    './static/4faa98f3-3ca5-4a92-b989-f662707b3ec23.png',
-                    './static/4faa98f3-3ca5-4a92-b989-f662707b3ec3.png',
-                    './static/67f33d020005bcec1d6d3ea158300315000000a100004f50.jpg',
-                    './static/79dU1My0AWfz233d851c175dbb3fb1eac84e1eee8a44.png',
-                    './static/8d9d7397-83b4-4cbe-8f17-de76605f5739.png'
+                    'https://cdn.jsdelivr.net/gh/massif-5279/Banner-Web/static/4faa98f3-3ca5-4a92-b989-f662707b3ec23.png',
+                    'https://cdn.jsdelivr.net/gh/massif-5279/Banner-Web/static/4faa98f3-3ca5-4a92-b989-f662707b3ec3.png',
+                    'https://cdn.jsdelivr.net/gh/massif-5279/Banner-Web/static/67f33d020005bcec1d6d3ea158300315000000a100004f50.jpg',
+                    'https://cdn.jsdelivr.net/gh/massif-5279/Banner-Web/static/79dU1My0AWfz233d851c175dbb3fb1eac84e1eee8a44.png',
+                    'https://cdn.jsdelivr.net/gh/massif-5279/Banner-Web/static/8d9d7397-83b4-4cbe-8f17-de76605f5739.png'
                 ];
                 
                 this.currentIndex = 0;
@@ -349,23 +349,54 @@
                     }
 
                     self.images.forEach(function(src, index) {
-                        var img = new Image();
-                        img.onload = function() {
+                        self.loadImageWithRetry(src, 3).then(function() {
                             self.loadedImages++;
                             self.updateLoadingStatus();
                             if (self.loadedImages === self.totalImages) {
                                 resolve();
                             }
-                        };
-                        img.onerror = function() {
-                            console.warn('图片加载失败: ' + src);
+                        }).catch(function() {
+                            console.warn('图片加载失败（已重试3次）: ' + src);
                             self.loadedImages++;
                             if (self.loadedImages === self.totalImages) {
                                 resolve();
                             }
-                        };
-                        img.src = src;
+                        });
                     });
+                });
+            }
+
+            // 带重试机制的图片加载
+            loadImageWithRetry(src, maxRetries) {
+                var self = this;
+                return new Promise(function(resolve, reject) {
+                    var retryCount = 0;
+                    
+                    function attemptLoad() {
+                        var img = new Image();
+                        
+                        img.onload = function() {
+                            console.log('图片加载成功: ' + src);
+                            resolve(img);
+                        };
+                        
+                        img.onerror = function() {
+                            retryCount++;
+                            console.warn('图片加载失败 (尝试 ' + retryCount + '/' + maxRetries + '): ' + src);
+                            
+                            if (retryCount < maxRetries) {
+                                // 延迟重试，避免频繁请求
+                                setTimeout(attemptLoad, 1000 * retryCount);
+                            } else {
+                                reject(new Error('图片加载失败，已达到最大重试次数'));
+                            }
+                        };
+                        
+                        // 直接使用原始URL，避免缓存和跨域问题
+                        img.src = src;
+                    }
+                    
+                    attemptLoad();
                 });
             }
 
