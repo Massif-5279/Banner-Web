@@ -278,28 +278,21 @@
     ">
         <div style="text-align: center;">
             <div style="margin-bottom: 20px;">正在加载图片...</div>
-            <div id="loadingProgress">0/5</div>
+            <div id="loadingProgress">0/110</div>
         </div>
     </div>
 
     <script>
         class DualCarousel {
             constructor() {
-                // 从static目录读取的图片文件列表
-                this.images = [
-                    'https://cdn.jsdelivr.net/gh/massif-5279/Banner-Web/static/4faa98f3-3ca5-4a92-b989-f662707b3ec23.png',
-                    'https://cdn.jsdelivr.net/gh/massif-5279/Banner-Web/static/4faa98f3-3ca5-4a92-b989-f662707b3ec3.png',
-                    'https://cdn.jsdelivr.net/gh/massif-5279/Banner-Web/static/67f33d020005bcec1d6d3ea158300315000000a100004f50.jpg',
-                    'https://cdn.jsdelivr.net/gh/massif-5279/Banner-Web/static/79dU1My0AWfz233d851c175dbb3fb1eac84e1eee8a44.png',
-                    'https://cdn.jsdelivr.net/gh/massif-5279/Banner-Web/static/8d9d7397-83b4-4cbe-8f17-de76605f5739.png'
-                ];
-                
+                // 图片数组将通过自动检测填充
+                this.images = [];
                 this.currentIndex = 0;
                 this.interval = 6000; // 默认3秒
                 this.isPlaying = true;
                 this.timer = null;
                 this.loadedImages = 0;
-                this.totalImages = this.images.length;
+                this.totalImages = 0; // 将在自动检测后更新
                 
                 // 检测浏览器是否支持CSS filter
                 this.supportsFilter = this.checkFilterSupport();
@@ -330,12 +323,133 @@
 
             init() {
                 var self = this;
-                this.preloadImages().then(function() {
+                // 首先自动检测图片数量
+                this.autoDetectImages().then(function() {
+                    // 检测完成后开始预加载
+                    return self.preloadImages();
+                }).then(function() {
                     self.createImages();
                     self.createIndicators();
                     self.bindEvents();
                     self.startAutoPlay();
                     self.updateStatus();
+                });
+            }
+
+            // 自动检测图片数量
+            autoDetectImages() {
+                var self = this;
+                var localBaseUrl = './static/';
+                
+                return new Promise(function(resolve) {
+                    console.log('开始自动检测本地图片数量...');
+                    
+                    // 更新加载状态显示
+                    var loadingProgress = document.getElementById('loadingProgress');
+                    if (loadingProgress) {
+                        loadingProgress.textContent = '检测本地图片中...';
+                    }
+                    
+                    // 直接使用本地图片源进行检测
+                    self.detectImagesSequentially(localBaseUrl, 1, []).then(function(imageUrls) {
+                        self.images = imageUrls;
+                        self.totalImages = self.images.length;
+                        
+                        console.log('本地图片检测完成，找到 ' + self.totalImages + ' 张图片');
+                        console.log('图片范围：1.jpg 到 ' + self.totalImages + '.jpg');
+                        
+                        // 更新加载状态
+                        if (loadingProgress) {
+                            loadingProgress.textContent = '0/' + self.totalImages;
+                        }
+                        
+                        resolve();
+                    });
+                });
+            }
+
+
+
+            // 递增检测图片，遇到连续失败则停止
+            detectImagesSequentially(baseUrl, startIndex, foundImages) {
+                var self = this;
+                var consecutiveFailures = 0;
+                var maxConsecutiveFailures = 10; // 连续失败10次后停止检测
+                
+                return new Promise(function(resolve) {
+                    function checkNext(index) {
+                        var url = baseUrl + index + '.jpg';
+                        
+                        self.checkImageExists(url, index).then(function(result) {
+                            if (result.exists) {
+                                foundImages.push(result.url);
+                                consecutiveFailures = 0; // 重置失败计数
+                                
+                                // 更新检测进度
+                                var loadingProgress = document.getElementById('loadingProgress');
+                                if (loadingProgress) {
+                                    loadingProgress.textContent = '检测中... 已找到 ' + foundImages.length + ' 张';
+                                }
+                                
+                                // 继续检测下一张
+                                setTimeout(function() { checkNext(index + 1); }, 50);
+                            } else {
+                                consecutiveFailures++;
+                                
+                                if (consecutiveFailures >= maxConsecutiveFailures) {
+                                    // 连续失败次数达到上限，停止检测
+                                    console.log('连续 ' + maxConsecutiveFailures + ' 次检测失败，停止检测');
+                                    resolve(foundImages);
+                                } else {
+                                    // 继续检测下一张
+                                    setTimeout(function() { checkNext(index + 1); }, 50);
+                                }
+                            }
+                        });
+                    }
+                    
+                    checkNext(startIndex);
+                });
+            }
+
+            // 检测单个图片是否存在
+            checkImageExists(url, index) {
+                return new Promise(function(resolve) {
+                    var img = new Image();
+                    var resolved = false;
+                    
+                    function resolveOnce(result) {
+                        if (!resolved) {
+                            resolved = true;
+                            resolve(result);
+                        }
+                    }
+                    
+                    img.onload = function() {
+                        console.log('图片存在: ' + index + '.jpg');
+                        resolveOnce({ exists: true, url: url, index: index });
+                    };
+                    
+                    img.onerror = function(e) {
+                        console.log('图片不存在: ' + index + '.jpg', e.type);
+                        resolveOnce({ exists: false, url: url, index: index });
+                    };
+                    
+                    // 设置较短的超时，避免长时间等待
+                    setTimeout(function() {
+                        if (!resolved) {
+                            console.log('图片检测超时: ' + index + '.jpg');
+                            resolveOnce({ exists: false, url: url, index: index });
+                        }
+                    }, 3000);
+                    
+                    // 尝试加载图片
+                    try {
+                        img.src = url;
+                    } catch (e) {
+                        console.log('图片加载异常: ' + index + '.jpg', e);
+                        resolveOnce({ exists: false, url: url, index: index });
+                    }
                 });
             }
 
